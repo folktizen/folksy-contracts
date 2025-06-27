@@ -10,9 +10,21 @@ import {
 import {ComposableCoW} from "@composable-cow/ComposableCoW.sol";
 
 import {Trading} from "exchange/mixins/Trading.sol";
+import {OrderStatus} from "exchange/libraries/OrderStructs.sol";
 
 import {FolksyOrder} from "./FolksyOrder.sol";
 
+// --- error strings
+string constant INVALID_HASH = "invalid hash";
+string constant CONDITION_NOT_MET = "condition not met";
+string constant POLYMARKET_ORDER_CANCELLED = "polymarket order cancelled";
+
+/**
+ * @title Folksy Conditional Order
+ * @dev This contract implements the logic for generating a tradeable order based on a Folksy order.
+ *      It inherits from BaseConditionalOrder to work with the ComposableCoW framework.
+ *
+ */
 contract Folksy is BaseConditionalOrder {
     ComposableCoW public immutable composableCow;
     Trading public immutable polymarket;
@@ -41,5 +53,12 @@ contract Folksy is BaseConditionalOrder {
         order = FolksyOrder.orderFor(folksyOrder, polymarket);
 
         // check if the polymarket order is fulfilled
+        OrderStatus memory status = polymarket.getOrderStatus(folksyOrder.polymarketOrderHash);
+        if (status.isFilledOrCancelled && status.remaining != 0) {
+            revert IConditionalOrder.PollNever(POLYMARKET_ORDER_CANCELLED);
+        }
+        if (!(status.isFilledOrCancelled && status.remaining == 0)) {
+            revert IConditionalOrder.PollTryNextBlock(CONDITION_NOT_MET);
+        }
     }
 }
